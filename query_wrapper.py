@@ -50,8 +50,8 @@ def main():
     print("Fetching information from both root TCC.db and user TCC.db")
     fetchAllInfo()
   elif sys.argv[1] == "-h":
-    print("Usage: ./query_wrapper.py (-h help) (-s <service_name>) (-c <client_name>)"
-          "Example: ./query_wrapper.py -s kTCCServiceSystemPolicyAllFiles"
+    print("Usage: ./query_wrapper.py (-h help) (-s <service_name>) (-c <client_name>)\n"
+          "Example: ./query_wrapper.py -s kTCCServiceSystemPolicyAllFiles\n"
           "         ./query_wrapper.py -c com.apple.Terminal")
   elif sys.argv[1] == "-c":
     print("Getting all services used by client: " + sys.argv[2])
