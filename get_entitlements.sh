@@ -1,6 +1,7 @@
 #!/bin/bash
 
 appPath="$1"
+tUsed=false
 
 usage() {
   echo "Usage: ./get_entitlements.sh <path/to/Application.{app|appex|bundle}>"
@@ -8,44 +9,67 @@ usage() {
 }
 
 getEntitlements() {
-  echo "[*] Step 0"
-  echo "[*] Getting entitlements for ${appPath}"
+  echo "[*] Step 0 - Getting entitlements for ${appPath}"
   codesign -d --ent - "${appPath}"
 
-  echo "[*] Step 1"
+  echo "[*] Step 1 - Check for Frameworks"
   if [ -d "${appPath}Contents/Frameworks" ]; then
+    echo "[!] Frameworks dir spotted"
     while IFS= read -r -d '' dir; do
       echo "[*] Getting entitlements for ${dir}"
       codesign -d --ent - "${dir}"
     done < <(find "${appPath}Contents/Frameworks" -maxdepth 1 -iname "*.app" -print0)
   fi
 
-  echo "[*] Step 2"
+  echo "[*] Step 2 - Check for PlugIns"
   if [ -d "${appPath}Contents/PlugIns" ]; then
+    echo "[!] PlugIns dir spotted"
     while IFS= read -r -d '' dir; do
       echo "[*] Getting entitlements for ${dir}"
       codesign -d --ent - "${dir}"
-    done < <(find "${appPath}Contents/PlugIns" -maxdepth 1 -iname "*.app" -print0)
+    done < <(find "${appPath}Contents/PlugIns" -maxdepth 1 -iname "*.appex" -print0)
   fi
 
-  echo "[*] Step 3"
+  echo "[*] Step 3 - Check for Extensions"
   if [ -d "${appPath}Contents/Extensions" ]; then
+    echo "[!] Extensions dir spotted"
     while IFS= read -r -d '' dir; do
       echo "[*] Getting entitlements for ${dir}"
       codesign -d --ent - "${dir}"
-    done < <(find "${appPath}Contents/Extensions" -maxdepth 1 -iname "*.app" -print0)
+    done < <(find "${appPath}Contents/Extensions" -maxdepth 1 -iname "*.appex" -print0)
   fi
 
-  echo "[*] Step 4"
+  echo "[*] Step 4 - Check for Library"
   if [ -d "${appPath}Contents/Library" ]; then
-    echo "[?] Library dir spotted. Search for apps by hand." 
+    echo "[!] Library dir spotted. Search for apps by hand."
   fi
 }
 
+getTCCEntitlements()
+{
+  echo "[*] Getting tcc-related entitlements"
+  getEntitlements | grep -e "Getting" -e "tcc" -e "kTCC" -e "spotted" -e "Step"
+}
+
 getCommon() {
+  # save dir where script is called from
   SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
-  if [ ! -d "${SCRIPT_PATH}/ent_output" ]; then
-    mkdir "${SCRIPT_PATH}/ent_output"
+  OUTDIR_PATH="${SCRIPT_PATH}/ent_output"
+  OUTFILE_PATH="${OUTDIR_PATH}/commonApplications"
+
+  if [ ! -d "$OUTDIR_PATH" ]; then
+    mkdir "$OUTDIR_PATH"
+  fi
+
+  if [ -f "$OUTFILE_PATH" ]; then
+    echo "[*] Removing previous commonApplications"
+    rm "$OUTFILE_PATH"
+  fi
+
+  if [ "$tUsed" = true ]; then
+    getEntRunner=getTCCEntitlements
+  else
+    getEntRunner=getEntitlements
   fi
 
   # common paths to search for apps?
@@ -60,20 +84,17 @@ getCommon() {
     while IFS= read -r -d '' file; do
       # change the path of the app bundle to be analyzed by getEntitlements
       appPath="${file}"
-      getEntitlements >> "${SCRIPT_PATH}/ent_output/commonApplications"
+      "$getEntRunner" >> "$OUTFILE_PATH"
     done < <(find "${path}" -maxdepth 1 -iname "*.app" -print0)
   done
 }
 
 while getopts 'thc' opt; do
   case "$opt" in
-    t) echo "[*] Getting tcc-related entitlements"
-       appPath="$2"
-       getEntitlements | grep -e "Getting" -e "tcc" -e "kTCC"
-       exit 0;;
+    t) appPath="$2"; tUsed=true;; # don't put -t into appPath
     h) usage; exit 0;;
     c) getCommon; exit 0;;
-    *) usage &>2; exit 1;; 
+    *) usage &>2; exit 1;;
   esac
 done
 # shift $((OPTIND - 1))
@@ -81,6 +102,8 @@ done
 # no arguments supplied
 if [ $# -eq 0 ]; then
   usage
+elif [ "$tUsed" = true ]; then
+  getTCCEntitlements
 else
   getEntitlements
 fi
