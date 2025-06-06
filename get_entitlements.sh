@@ -12,7 +12,7 @@ getEntitlements() {
   echo "[*] Step 0 - Getting entitlements for ${appPath}"
   codesign -d --ent - "${appPath}"
 
-  echo "[*] Step 1 - Check for Frameworks"
+  #echo "[*] Step 1 - Check for Frameworks"
   if [ -d "${appPath}Contents/Frameworks" ]; then
     echo "[!] Frameworks dir spotted"
     while IFS= read -r -d '' dir; do
@@ -21,7 +21,7 @@ getEntitlements() {
     done < <(find "${appPath}Contents/Frameworks" -maxdepth 1 -iname "*.app" -print0)
   fi
 
-  echo "[*] Step 2 - Check for PlugIns"
+  #echo "[*] Step 2 - Check for PlugIns"
   if [ -d "${appPath}Contents/PlugIns" ]; then
     echo "[!] PlugIns dir spotted"
     while IFS= read -r -d '' dir; do
@@ -30,7 +30,7 @@ getEntitlements() {
     done < <(find "${appPath}Contents/PlugIns" -maxdepth 1 -iname "*.appex" -print0)
   fi
 
-  echo "[*] Step 3 - Check for Extensions"
+  #echo "[*] Step 3 - Check for Extensions"
   if [ -d "${appPath}Contents/Extensions" ]; then
     echo "[!] Extensions dir spotted"
     while IFS= read -r -d '' dir; do
@@ -39,7 +39,7 @@ getEntitlements() {
     done < <(find "${appPath}Contents/Extensions" -maxdepth 1 -iname "*.appex" -print0)
   fi
 
-  echo "[*] Step 4 - Check for Library"
+  #echo "[*] Step 4 - Check for Library"
   if [ -d "${appPath}Contents/Library" ]; then
     echo "[!] Library dir spotted. Search for apps by hand."
   fi
@@ -47,8 +47,26 @@ getEntitlements() {
 
 getTCCEntitlements()
 {
-  echo "[*] Getting tcc-related entitlements"
   getEntitlements | grep -e "Getting" -e "tcc" -e "kTCC" -e "spotted" -e "Step"
+}
+
+getEntFromFrameworkBinaries()
+{
+  declare -a frameworkPaths=("/System/Library/Frameworks"
+                             "/System/Library/PrivateFrameworks"
+                            )
+  for fwPath in "${frameworkPaths[@]}"; do
+    echo "[*] Step - Check ${fwPath}"
+    while IFS= read -r -d '' file; do
+      echo "[*] Getting entitlements for" "${file}"/*
+      codesign -d --ent - "${file}"/*
+    done < <(find "${fwPath}" -name "MacOS" -print0)
+  done
+}
+
+getTCCEntFromFrameworkBinaries()
+{
+  getEntFromFrameworkBinaries | grep -e "Getting" -e "tcc" -e "kTCC" -e "spotted" -e "Step"
 }
 
 getCommon() {
@@ -67,16 +85,17 @@ getCommon() {
   fi
 
   if [ "$tUsed" = true ]; then
+    echo "[*] Getting tcc-related entitlements"
     getEntRunner=getTCCEntitlements
+    getFrameworkEntRunner=getTCCEntFromFrameworkBinaries
   else
     getEntRunner=getEntitlements
+    getFrameworkEntRunner=getEntFromFrameworkBinaries
   fi
 
   # common paths to search for apps?
   declare -a commonPaths=("/Applications"
                           "/System/Applications"
-                          "/System/Library/Frameworks"
-                          "/System/Library/PrivateFrameworks"
                          )
 
   # check each relevant path in turn
@@ -87,6 +106,9 @@ getCommon() {
       "$getEntRunner" >> "$OUTFILE_PATH"
     done < <(find "${path}" -maxdepth 1 -iname "*.app" -print0)
   done
+
+  # searches and gets entitlements from apps inside of .framework directories
+  "$getFrameworkEntRunner" frameworkPaths >> "$OUTFILE_PATH"
 }
 
 while getopts 'thc' opt; do
