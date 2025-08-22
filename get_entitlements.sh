@@ -4,8 +4,11 @@ appPath="$1"
 tUsed=false
 
 usage() {
-  echo "Usage: ./get_entitlements.sh <path/to/Application.{app|appex|bundle}>"
-  echo "Usage: ./get_entitlements.sh -t <path/to/Application.{app|appex|bundle}>"
+  echo "Usage: ./get_entitlements.sh -h"
+  echo "       ./get_entitlements.sh <path/to/Application.{app|appex|bundle}>"
+  echo "       ./get_entitlements.sh -t <path/to/Application.{app|appex|bundle}>"
+  echo "       ./get_entitlements.sh -c"
+  echo "       ./get_entitlements.sh -tc"
 }
 
 getEntitlements() {
@@ -13,34 +16,34 @@ getEntitlements() {
   codesign -d --ent - "${appPath}"
 
   #echo "[*] Step 1 - Check for Frameworks"
-  if [ -d "${appPath}Contents/Frameworks" ]; then
+  if [ -d "${appPath}/Contents/Frameworks" ]; then
     echo "[!] Frameworks dir spotted"
     while IFS= read -r -d '' dir; do
       echo "[*] Getting entitlements for ${dir}"
       codesign -d --ent - "${dir}"
-    done < <(find "${appPath}Contents/Frameworks" -maxdepth 1 -iname "*.app" -print0)
+    done < <(find "${appPath}/Contents/Frameworks" -maxdepth 1 -iname "*.app" -print0)
   fi
 
   #echo "[*] Step 2 - Check for PlugIns"
-  if [ -d "${appPath}Contents/PlugIns" ]; then
+  if [ -d "${appPath}/Contents/PlugIns" ]; then
     echo "[!] PlugIns dir spotted"
     while IFS= read -r -d '' dir; do
       echo "[*] Getting entitlements for ${dir}"
       codesign -d --ent - "${dir}"
-    done < <(find "${appPath}Contents/PlugIns" -maxdepth 1 -iname "*.appex" -print0)
+    done < <(find "${appPath}/Contents/PlugIns" -maxdepth 1 -iname "*.appex" -print0)
   fi
 
   #echo "[*] Step 3 - Check for Extensions"
-  if [ -d "${appPath}Contents/Extensions" ]; then
+  if [ -d "${appPath}/Contents/Extensions" ]; then
     echo "[!] Extensions dir spotted"
     while IFS= read -r -d '' dir; do
       echo "[*] Getting entitlements for ${dir}"
       codesign -d --ent - "${dir}"
-    done < <(find "${appPath}Contents/Extensions" -maxdepth 1 -iname "*.appex" -print0)
+    done < <(find "${appPath}/Contents/Extensions" -maxdepth 1 -iname "*.appex" -print0)
   fi
 
   #echo "[*] Step 4 - Check for Library"
-  if [ -d "${appPath}Contents/Library" ]; then
+  if [ -d "${appPath}/Contents/Library" ]; then
     echo "[!] Library dir spotted. Search for apps by hand."
   fi
 }
