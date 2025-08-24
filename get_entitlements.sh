@@ -9,6 +9,7 @@ usage() {
   echo "       ./get_entitlements.sh -t <path/to/Application.{app|appex|bundle}>"
   echo "       ./get_entitlements.sh -c"
   echo "       ./get_entitlements.sh -tc"
+  echo "       ./get_entitlements.sh -a"
 }
 
 getEntitlements() {
@@ -76,7 +77,18 @@ getCommon() {
   # save dir where script is called from
   SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
   OUTDIR_PATH="${SCRIPT_PATH}/ent_output"
-  OUTFILE_PATH="${OUTDIR_PATH}/commonApplications"
+
+  if [ "$tUsed" = true ]; then
+    echo "[*] Getting tcc-related entitlements"
+    getEntRunner=getTCCEntitlements
+    getFrameworkEntRunner=getTCCEntFromFrameworkBinaries
+    OUTFILE_PATH="${OUTDIR_PATH}/commonApplicationsEntitlements_TCC"
+  else
+    echo "[*] Getting all entitlements"
+    getEntRunner=getEntitlements
+    getFrameworkEntRunner=getEntFromFrameworkBinaries
+    OUTFILE_PATH="${OUTDIR_PATH}/commonApplicationsEntitlements"
+  fi
 
   if [ ! -d "$OUTDIR_PATH" ]; then
     mkdir "$OUTDIR_PATH"
@@ -85,15 +97,6 @@ getCommon() {
   if [ -f "$OUTFILE_PATH" ]; then
     echo "[*] Removing previous commonApplications"
     rm "$OUTFILE_PATH"
-  fi
-
-  if [ "$tUsed" = true ]; then
-    echo "[*] Getting tcc-related entitlements"
-    getEntRunner=getTCCEntitlements
-    getFrameworkEntRunner=getTCCEntFromFrameworkBinaries
-  else
-    getEntRunner=getEntitlements
-    getFrameworkEntRunner=getEntFromFrameworkBinaries
   fi
 
   # common paths to search for apps?
@@ -114,12 +117,13 @@ getCommon() {
   "$getFrameworkEntRunner" frameworkPaths >> "$OUTFILE_PATH"
 }
 
-while getopts 'thc' opt; do
+while getopts 'thca' opt; do
   case "$opt" in
     t) appPath="$2"; tUsed=true;; # don't put -t into appPath
     h) usage; exit 0;;
     c) getCommon; exit 0;;
-    *) usage &>2; exit 1;;
+    a) getCommon; tUsed=true; getCommon; exit 0;; # get both entitlement output files
+    *) usage >&2; exit 1;;
   esac
 done
 # shift $((OPTIND - 1))
