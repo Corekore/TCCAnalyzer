@@ -56,7 +56,8 @@ getTCCEntitlements()
 # from private frameworks basically
 getEntFromFrameworkBinaries()
 {
-  declare -a frameworkPaths=("/System/Library/Frameworks"
+  declare -a frameworkPaths=(
+                             "/System/Library/Frameworks"
                              "/System/Library/PrivateFrameworks"
                              "/Library/Apple/System/Library"
                              "/Library/Image Capture"
@@ -67,6 +68,25 @@ getEntFromFrameworkBinaries()
                              "/Library/Audio"
                              "/Library/Frameworks"
                             )
+
+  # take only Frameworks and PrivateFrameworks
+  for fwPath in "${frameworkPaths[@]:0:2}"; do
+    # get the second-level-directory binaries (e.g. Security.framework/authtrampoline)
+    secondLevelFiles=$(find "${fwPath}" -maxdepth 2 -type f -exec sh -c '
+                        for f; do
+                          if file "$f" | grep -q "Mach-O"; then
+                            printf "%s\n" "$f"
+                          fi
+                        done
+                        ' _ {} +
+                      )
+
+    for file in $secondLevelFiles; do
+      echo "[*] Getting entitlements for" "${file}"
+      codesign -d --ent - "${file}"
+    done
+  done
+
   for fwPath in "${frameworkPaths[@]}"; do
     echo "[*] Step - Check ${fwPath}"
     while IFS= read -r -d '' pathToMacOS; do
@@ -81,7 +101,8 @@ getEntFromFrameworkBinaries()
 
 getEntFromSystemBinaries()
 {
-  declare -a systemPaths=("/usr/libexec"
+  declare -a systemPaths=(
+                          "/usr/libexec"
                           "/usr/bin"
                           "/usr/sbin"
                          )
@@ -132,7 +153,8 @@ getCommon() {
   fi
 
   # common paths to search for apps?
-  declare -a commonPaths=("/Applications"
+  declare -a commonPaths=(
+                          "/Applications"
                           "/System/Applications"
                          )
 
