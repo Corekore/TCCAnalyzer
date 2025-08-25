@@ -1,5 +1,4 @@
 #!/bin/bash
-
 appPath="$1"
 tUsed=false
 
@@ -54,18 +53,49 @@ getTCCEntitlements()
   getEntitlements | grep -e "Getting" -e "tcc" -e "kTCC" -e "spotted" -e "Step"
 }
 
+# from private frameworks basically
 getEntFromFrameworkBinaries()
 {
   declare -a frameworkPaths=("/System/Library/Frameworks"
                              "/System/Library/PrivateFrameworks"
+                             "/Library/Apple/System/Library"
+                             "/Library/Image Capture"
+                             "/Library/Application Support"
+                             "/Library/Developer"
+                             "/Library/Spotlight"
+                             "/Library/Extensions"
+                             "/Library/Audio"
+                             "/Library/Frameworks"
                             )
   for fwPath in "${frameworkPaths[@]}"; do
     echo "[*] Step - Check ${fwPath}"
-    while IFS= read -r -d '' file; do
-      echo "[*] Getting entitlements for" "${file}"/*
-      codesign -d --ent - "${file}"/*
+    while IFS= read -r -d '' pathToMacOS; do
+      # this for loop is handling cases where there are multiple binaries in the same MacOS dir
+      for file in "${pathToMacOS}"/*; do
+        echo "[*] Getting entitlements for" "${file}"
+        codesign -d --ent - "${file}"
+      done
     done < <(find "${fwPath}" -name "MacOS" -print0)
   done
+}
+
+getEntFromSystemBinaries()
+{
+  declare -a systemPaths=("/usr/libexec"
+                          "/usr/bin"
+                          "/usr/sbin"
+                         )
+  for sysPath in "${systemPaths[@]}"; do
+    echo "[*] Step - Check ${sysPath}"
+    for file in "${sysPath}"/*; do
+      echo "[*] Getting entitlements for" "${file}"
+      codesign -d --ent - "${file}"
+    done
+  done
+}
+
+getTCCEntFromSystemBinaries() {
+  getEntFromSystemBinaries | grep -e "Getting" -e "tcc" -e "kTCC" -e "spotted" -e "Step"
 }
 
 getTCCEntFromFrameworkBinaries()
@@ -82,11 +112,13 @@ getCommon() {
     echo "[*] Getting tcc-related entitlements"
     getEntRunner=getTCCEntitlements
     getFrameworkEntRunner=getTCCEntFromFrameworkBinaries
+    getEntFromSysBinRunner=getTCCEntFromSystemBinaries
     OUTFILE_PATH="${OUTDIR_PATH}/commonApplicationsEntitlements_TCC"
   else
     echo "[*] Getting all entitlements"
     getEntRunner=getEntitlements
     getFrameworkEntRunner=getEntFromFrameworkBinaries
+    getEntFromSysBinRunner=getEntFromSystemBinaries
     OUTFILE_PATH="${OUTDIR_PATH}/commonApplicationsEntitlements"
   fi
 
@@ -113,8 +145,9 @@ getCommon() {
     done < <(find "${path}" -maxdepth 1 -iname "*.app" -print0)
   done
 
-  # searches and gets entitlements from apps inside of .framework directories
-  "$getFrameworkEntRunner" frameworkPaths >> "$OUTFILE_PATH"
+  # searches and gets entitlements from apps inside of .framework directories... and others!
+  "$getFrameworkEntRunner" >> "$OUTFILE_PATH"
+  "$getEntFromSysBinRunner" >> "$OUTFILE_PATH"
 }
 
 while getopts 'thca' opt; do
