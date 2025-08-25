@@ -1,7 +1,7 @@
 #!/bin/bash
 appPath="$1"
 tUsed=false
-
+set -x
 usage() {
   echo "Usage: ./get_entitlements.sh -h"
   echo "       ./get_entitlements.sh <path/to/Application.{app|appex|bundle}>"
@@ -62,41 +62,37 @@ getEntFromFrameworkBinaries()
                              "/Library/Apple/System/Library"
                              "/Library/Image Capture"
                              "/Library/Application Support"
-                             "/Library/Developer"
+                            #  "/Library/Developer"
                              "/Library/Spotlight"
                              "/Library/Extensions"
                              "/Library/Audio"
                              "/Library/Frameworks"
                             )
 
-  # take only Frameworks and PrivateFrameworks
-  for fwPath in "${frameworkPaths[@]:0:2}"; do
-    # get the second-level-directory binaries (e.g. Security.framework/authtrampoline)
-    secondLevelFiles=$(find "${fwPath}" -maxdepth 2 -type f -exec sh -c '
-                        for f; do
-                          if file "$f" | grep -q "Mach-O"; then
-                            printf "%s\n" "$f"
-                          fi
-                        done
-                        ' _ {} +
-                      )
-
-    for file in $secondLevelFiles; do
+  for fwPath in "${frameworkPaths[@]}"; do
+    echo "[*] Step - Check ${fwPath}"
+    filePaths=($(find "${fwPath}" -type f -exec sh -c '
+      for f; do
+        if file "$f" | grep -q "Mach-O .* executable"; then
+          printf "%s\n" "$f"
+        fi
+      done
+    ' _ {} +))
+    for file in "${filePaths[@]}"; do
       echo "[*] Getting entitlements for" "${file}"
       codesign -d --ent - "${file}"
     done
   done
 
-  for fwPath in "${frameworkPaths[@]}"; do
-    echo "[*] Step - Check ${fwPath}"
-    while IFS= read -r -d '' pathToMacOS; do
-      # this for loop is handling cases where there are multiple binaries in the same MacOS dir
-      for file in "${pathToMacOS}"/*; do
-        echo "[*] Getting entitlements for" "${file}"
-        codesign -d --ent - "${file}"
-      done
-    done < <(find "${fwPath}" -name "MacOS" -print0)
-  done
+  # lots of junk, we search binaries by MacOS directory
+  echo "[*] Step - Check /Library/Developer"
+  while IFS= read -r -d '' pathToMacOS; do
+    # handle cases where there are multiple binaries in the same MacOS dir
+    for file in "${pathToMacOS}"/*; do
+      echo "[*] Getting entitlements for" "${file}"
+      codesign -d --ent - "${file}"
+    done
+  done < <(find "/Library/Developer" -name "MacOS" -print0)
 }
 
 getEntFromSystemBinaries()
