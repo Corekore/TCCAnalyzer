@@ -1,23 +1,35 @@
 #!/bin/bash
+set -x
+
+# declarations
 appPath="$1"
 tUsed=false
-set -x
+sUsed=false
+declare -a filePaths  # save dir where script is called from
+SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+OUTDIR_PATH="${SCRIPT_PATH}/ent_output"
+SYSTEM_OUTFILE_PATH=""
+USER_OUTFILE_PATH=""
+
 usage() {
   echo "Usage: ./get_entitlements.sh -h"
   echo "       ./get_entitlements.sh <path/to/Application.{app|appex|bundle}>"
   echo "       ./get_entitlements.sh -t <path/to/Application.{app|appex|bundle}>"
   echo "       ./get_entitlements.sh -c"
-  echo "       ./get_entitlements.sh -tc"
-  echo "       ./get_entitlements.sh -a"
+  echo "Options: -t <path> prints tcc entitlements of that bundle"
+  echo "         -c prints entitlements of user and system applications in separate files"
+  echo "         -tc prints tcc entitlements of user and system applications in separate files"
+  echo "         -a (all): runs -c and -tc"
+  echo "         -s (sanitized): removes binaries that have no entitlements"
 }
 
 getEntitlements() {
   echo "[*] Step 0 - Getting entitlements for ${appPath}"
   codesign -d --ent - "${appPath}"
 
-  #echo "[*] Step 1 - Check for Frameworks"
+  # echo "[*] Step 1 - Check for Frameworks"
   if [ -d "${appPath}/Contents/Frameworks" ]; then
-    echo "[!] Frameworks dir spotted"
+    # echo "[!] Frameworks dir spotted"
     while IFS= read -r -d '' dir; do
       echo "[*] Getting entitlements for ${dir}"
       codesign -d --ent - "${dir}"
@@ -26,7 +38,7 @@ getEntitlements() {
 
   #echo "[*] Step 2 - Check for PlugIns"
   if [ -d "${appPath}/Contents/PlugIns" ]; then
-    echo "[!] PlugIns dir spotted"
+    # echo "[!] PlugIns dir spotted"
     while IFS= read -r -d '' dir; do
       echo "[*] Getting entitlements for ${dir}"
       codesign -d --ent - "${dir}"
@@ -35,7 +47,7 @@ getEntitlements() {
 
   #echo "[*] Step 3 - Check for Extensions"
   if [ -d "${appPath}/Contents/Extensions" ]; then
-    echo "[!] Extensions dir spotted"
+    # echo "[!] Extensions dir spotted"
     while IFS= read -r -d '' dir; do
       echo "[*] Getting entitlements for ${dir}"
       codesign -d --ent - "${dir}"
@@ -71,13 +83,18 @@ getEntFromFrameworkBinaries()
 
   for fwPath in "${frameworkPaths[@]}"; do
     echo "[*] Step - Check ${fwPath}"
-    filePaths=($(find "${fwPath}" -type f -exec sh -c '
-      for f; do
-        if file "$f" | grep -q "Mach-O .* executable"; then
-          printf "%s\n" "$f"
-        fi
-      done
-    ' _ {} +))
+    
+    # -a scenario calls this function twice; no need to gather filePaths twice
+    if [ ${#filePaths[@]} -eq 0 ]; then
+      filePaths=($(find "${fwPath}" -type f -exec sh -c '
+        for f; do
+          if file "$f" | grep -q "Mach-O .* executable"; then
+            printf "%s\n" "$f"
+          fi
+        done
+      ' _ {} +))
+    fi
+
     for file in "${filePaths[@]}"; do
       echo "[*] Getting entitlements for" "${file}"
       codesign -d --ent - "${file}"
@@ -121,31 +138,36 @@ getTCCEntFromFrameworkBinaries()
 }
 
 getCommon() {
-  # save dir where script is called from
-  SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
-  OUTDIR_PATH="${SCRIPT_PATH}/ent_output"
+
 
   if [ "$tUsed" = true ]; then
-    echo "[*] Getting tcc-related entitlements"
+    echo "[*] Gathering tcc-related entitlements"
     getEntRunner=getTCCEntitlements
     getFrameworkEntRunner=getTCCEntFromFrameworkBinaries
     getEntFromSysBinRunner=getTCCEntFromSystemBinaries
-    OUTFILE_PATH="${OUTDIR_PATH}/commonApplicationsEntitlements_TCC"
+    SYSTEM_OUTFILE_PATH="${OUTDIR_PATH}/systemApplicationsEntitlements_TCC"
+    USER_OUTFILE_PATH="${OUTDIR_PATH}/userApplicationsEntitlements_TCC"
   else
-    echo "[*] Getting all entitlements"
+    echo "[*] Gathering all entitlements"
     getEntRunner=getEntitlements
     getFrameworkEntRunner=getEntFromFrameworkBinaries
     getEntFromSysBinRunner=getEntFromSystemBinaries
-    OUTFILE_PATH="${OUTDIR_PATH}/commonApplicationsEntitlements"
+    SYSTEM_OUTFILE_PATH="${OUTDIR_PATH}/systemApplicationsEntitlements"
+    USER_OUTFILE_PATH="${OUTDIR_PATH}/userApplicationsEntitlements"
   fi
 
   if [ ! -d "$OUTDIR_PATH" ]; then
     mkdir "$OUTDIR_PATH"
   fi
 
-  if [ -f "$OUTFILE_PATH" ]; then
-    echo "[*] Removing previous commonApplications"
-    rm "$OUTFILE_PATH"
+  if [ -f "$SYSTEM_OUTFILE_PATH" ]; then
+    echo "[*] Removing previous $SYSTEM_OUTFILE_PATH"
+    rm "$SYSTEM_OUTFILE_PATH"
+  fi
+
+  if [ -f "$USER_OUTFILE_PATH" ]; then
+    echo "[*] Removing previous $USER_OUTFILE_PATH"
+    rm "$USER_OUTFILE_PATH"
   fi
 
   # common paths to search for apps?
@@ -159,19 +181,40 @@ getCommon() {
     while IFS= read -r -d '' file; do
       # change the path of the app bundle to be analyzed by getEntitlements
       appPath="${file}"
-      "$getEntRunner" >> "$OUTFILE_PATH"
+      "$getEntRunner" >> "$USER_OUTFILE_PATH"
     done < <(find "${path}" -maxdepth 1 -iname "*.app" -print0)
   done
 
   # searches and gets entitlements from apps inside of .framework directories... and others!
-  "$getFrameworkEntRunner" >> "$OUTFILE_PATH"
-  "$getEntFromSysBinRunner" >> "$OUTFILE_PATH"
+  "$getFrameworkEntRunner" >> "$SYSTEM_OUTFILE_PATH"
+  "$getEntFromSysBinRunner" >> "$SYSTEM_OUTFILE_PATH"
+
+  if [ "$sUsed" = "true" ]; then
+    echo "[*] Sanitizing..."
+    sanitize
+  fi
 }
 
-while getopts 'thca' opt; do
+sanitize() {
+  TMP_PATH="${OUTDIR_PATH}/tmp"
+  FILE_LIST=("$USER_OUTFILE_PATH" "$SYSTEM_OUTFILE_PATH")
+  for file in "${FILE_LIST[@]}"; do
+    echo "[*] Sanitizing $file"
+    echo "" > "$TMP_PATH"
+    echo "" > "${TMP_PATH}2"
+    # reverse the file, then keep the first occurance of "[*] Getting" in adjacent lines containing the string
+    tail -r "$file" | perl -ne 'print unless $t and /^\[\*\] Getting/; $t = /^\[\*\] Getting/' >> "$TMP_PATH"
+    tail -r "$TMP_PATH" >> "${TMP_PATH}2"
+    cp "${TMP_PATH}2" "${file}_sanitized"
+  done
+  rm "$TMP_PATH" "${TMP_PATH}2"
+}
+
+while getopts 'hstca' opt; do
   case "$opt" in
-    t) appPath="$2"; tUsed=true;; # don't put -t into appPath
     h) usage; exit 0;;
+    s) sUsed=true;; # -sa creates sanitized output
+    t) appPath="$2"; tUsed=true;; # don't put -t into appPath
     c) getCommon; exit 0;;
     a) getCommon; tUsed=true; getCommon; exit 0;; # get both entitlement output files
     *) usage >&2; exit 1;;
