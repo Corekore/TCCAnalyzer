@@ -6,7 +6,7 @@ usage() {
   echo "Usage: ./extract_data.sh <path/to/output/folder>"
 }
 
-analyze() {
+extract() {
   for file in ${output_path}/*.tar; do
     extract_dir=${output_path}/${file//".tar"/}
     echo $file
@@ -18,5 +18,5 @@ analyze() {
 if [ $# -eq 0 ]; then
   usage
 else
-  analyze
+  extract
 fi
