@@ -202,7 +202,7 @@ sanitize() {
     echo "[*] Sanitizing $file"
     echo "" > "$TMP_PATH"
     echo "" > "${TMP_PATH}2"
-    # reverse the file, then keep the first occurance of "[*] Getting" in adjacent lines containing the string
+    # reverse the file, then keep the first occurence of "[*] Getting" in adjacent lines containing the string
     tail -r "$file" | perl -ne 'print unless $t and /^\[\*\] Getting/; $t = /^\[\*\] Getting/' >> "$TMP_PATH"
     tail -r "$TMP_PATH" >> "${TMP_PATH}2"
     cp "${TMP_PATH}2" "${file}_sanitized"
