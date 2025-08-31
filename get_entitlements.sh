@@ -84,16 +84,13 @@ getEntFromFrameworkBinaries()
   for fwPath in "${frameworkPaths[@]}"; do
     echo "[*] Step - Check ${fwPath}"
     
-    # -a scenario calls this function twice; no need to gather filePaths twice
-    if [ ${#filePaths[@]} -eq 0 ]; then
-      filePaths=($(find "${fwPath}" -type f -exec sh -c '
-        for f; do
-          if file "$f" | grep -q "Mach-O .* executable"; then
-            printf "%s\n" "$f"
-          fi
-        done
-      ' _ {} +))
-    fi
+    filePaths=($(find "${fwPath}" -type f -exec sh -c '
+      for f; do
+        if file "$f" | grep -q "Mach-O .* executable"; then
+          printf "%s\n" "$f"
+        fi
+      done
+    ' _ {} +))
 
     for file in "${filePaths[@]}"; do
       echo "[*] Getting entitlements for" "${file}"
