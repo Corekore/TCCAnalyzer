@@ -11,7 +11,8 @@ OUTDIR_PATH="${SCRIPT_PATH}/ent_output"
 SYSTEM_OUTFILE_PATH=""
 USER_OUTFILE_PATH=""
 
-usage() {
+usage()
+{
   echo "Usage: ./get_entitlements.sh -h"
   echo "       ./get_entitlements.sh <path/to/Application.{app|appex|bundle}>"
   echo "       ./get_entitlements.sh -t <path/to/Application.{app|appex|bundle}>"
@@ -23,7 +24,8 @@ usage() {
   echo "         -s (sanitized): removes binaries that have no entitlements"
 }
 
-getEntitlements() {
+getEntitlements()
+{
   echo "[*] Step 0 - Getting entitlements for ${appPath}"
   codesign -d --ent - "${appPath}"
 
@@ -71,6 +73,12 @@ getEntFromFrameworkBinaries()
   declare -a frameworkPaths=(
                              "/System/Library/Frameworks"
                              "/System/Library/PrivateFrameworks"
+                            #  "/System/Library/CoreServices"
+                            #  "/System/Library/Filesystems"
+                            #  "/System/Library/PreferencePanes"
+                            #  "/System/Library/CryptoTokenKit"
+                            #  "/System/Library/QuickLook"
+                            #  "/System/Library/InternetAccounts"
                              "/Library/Apple/System/Library"
                              "/Library/Image Capture"
                              "/Library/Application Support"
@@ -125,7 +133,8 @@ getEntFromSystemBinaries()
   done
 }
 
-getTCCEntFromSystemBinaries() {
+getTCCEntFromSystemBinaries()
+{
   getEntFromSystemBinaries | grep -e "Getting" -e "tcc" -e "kTCC" -e "spotted" -e "Step"
 }
 
@@ -134,9 +143,8 @@ getTCCEntFromFrameworkBinaries()
   getEntFromFrameworkBinaries | grep -e "Getting" -e "tcc" -e "kTCC" -e "spotted" -e "Step"
 }
 
-getCommon() {
-
-
+getCommon()
+{
   if [ "$tUsed" = true ]; then
     echo "[*] Gathering tcc-related entitlements"
     getEntRunner=getTCCEntitlements
@@ -192,7 +200,8 @@ getCommon() {
   fi
 }
 
-sanitize() {
+sanitize()
+{
   TMP_PATH="${OUTDIR_PATH}/tmp"
   FILE_LIST=("$USER_OUTFILE_PATH" "$SYSTEM_OUTFILE_PATH")
   for file in "${FILE_LIST[@]}"; do

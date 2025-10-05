@@ -4,7 +4,8 @@ vm=$1
 host=$2
 vm_dirpath=$3
 
-usage() {
+usage()
+{
   echo "Usage: ./collect_vm_data.sh vm@ip host@ip path/to/repo"
 }
 
